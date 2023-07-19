@@ -1,0 +1,68 @@
+import json
+import boto3
+
+def lambda_handler(event, context):
+        path = event['queryStringParameters']['path']
+        task = ['my-ecs-task']
+        run_tasks = []
+        if(path == 'startall' or path == 'stopall'):
+               run_tasks.extend(task)
+        else:
+               run_tasks.append('my-ecs-task')
+        print(run_tasks)
+        # Create a Boto3 client for ECS
+        ecs_client = boto3.client('ecs')
+ 
+        print("mett")
+        event2 = ecs_client.list_tasks(
+                    cluster='my-test-cluster',
+                    family='my-ecs-task',
+                    desiredStatus='RUNNING'
+                )   
+        print("start")
+        print(event2)
+        print('taskIDs are')
+        
+        task_id = [task_arn.split('/')[-1] for task_arn in event2['taskArns']]
+        if path =='stopall':
+            for task_run in task_id:
+                res = ecs_client.stop_task(
+                           cluster='my-test-cluster',
+                   
+                           task=task_run
+                         )
+            response = {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'path': path, 'taskArn': task_id})
+                 }     
+        else:
+            for task in run_tasks:
+                
+                responsed = ecs_client.list_task_definitions(familyPrefix=task, status='ACTIVE')
+                task_definition_arn = responsed['taskDefinitionArns'][0]
+                print(task_definition_arn)
+                
+                print(task_definition_arn)
+                response = ecs_client.run_task(
+                        cluster='my-test-cluster',
+                        taskDefinition=task_definition_arn,
+                        launchType='FARGATE',
+                        networkConfiguration={
+                            'awsvpcConfiguration': {
+                                'subnets': ['subnet-004ba0e8583ea08c2'],
+                                'securityGroups': ['sg-09071bc7ff4ffb58e'],
+                                'assignPublicIp': 'ENABLED'
+                            }
+                        }
+                    )
+                
+                # Return the task ARN if successful
+                task_arn = response['tasks'][0]['taskArn']
+                response = {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'path': path, 'taskArn': task_arn})
+                }
+
+        return response
